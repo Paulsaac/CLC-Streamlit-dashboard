@@ -307,11 +307,12 @@ class CLCPDFReport(FPDF):
         periodo_text = f"{self.report_type} | Período: {self.period_str}" if self.period_str else self.report_type
         self.cell(115, 6, sanitize_text(periodo_text), 0, 1, "L")
 
-        # Logo del cliente en la esquina superior derecha
+        # Logo del cliente en la esquina superior derecha (logo-white.png)
         import os
-        if os.path.exists("logo.png"):
+        logo_pdf_path = "logo-white.png" if os.path.exists("logo-white.png") else ("logo.png" if os.path.exists("logo.png") else None)
+        if logo_pdf_path:
             try:
-                self.image("logo.png", x=168, y=3.0, h=17)
+                self.image(logo_pdf_path, x=168, y=3.0, h=17)
             except Exception:
                 now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
                 self.set_font("Helvetica", "", 7.5)

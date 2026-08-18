@@ -4,9 +4,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 import numpy as np
 from data_loader import load_all_data
 from pdf_generator import generate_monthly_pdf_report, generate_weekly_pdf_report
+
+# Configurar plantilla clara por defecto en todos los gráficos Plotly
+pio.templates.default = "plotly_white"
 
 # Función para codificar logo local en Base64
 def get_image_base64(image_path: str) -> str:
@@ -24,73 +28,115 @@ st.set_page_config(
     layout="wide"
 )
 
-# Cargar logo en base64
-logo_b64 = get_image_base64("logo.png")
+# Cargar logo para la visualización web (logo-green.png)
+logo_web_path = "logo-green.png" if os.path.exists("logo-green.png") else "logo.png"
+logo_b64 = get_image_base64(logo_web_path)
 
-# Inyección de Estilos CSS Corporativos y Logo Fijo
+# Inyección de Estilos CSS Corporativos (Tema Claro con Paleta Verde CLC)
 st.markdown(f"""
 <style>
-    /* Variables de Paleta Corporativa */
+    /* Variables de Paleta Corporativa CLC */
     :root {{
         --verde-principal: #124E3F;
+        --verde-medio: #1E824C;
         --verde-acento: #25D366;
-        --gris-oscuro: #222222;
+        --verde-fondo-suave: #F0F7F4;
+        --gris-texto: #222222;
+        --gris-secundario: #555555;
+        --gris-borde: #E2E8F0;
         --fondo-blanco: #FFFFFF;
+        --fondo-sidebar: #F8FAF9;
     }}
     
-    /* Contenedor del Logo Fijo en la Esquina Superior Derecha */
-    #logo-header {{
-        position: fixed;
-        top: 14px;
-        right: 28px;
-        z-index: 1000;
-        max-width: 140px;
-        pointer-events: none;
+    /* Fondo General Claro */
+    .stApp {{
+        background-color: var(--fondo-blanco) !important;
+        color: var(--gris-texto) !important;
     }}
-    #logo-header img {{
-        width: 100%;
-        height: auto;
-        max-height: 52px;
-        object-fit: contain;
+
+    /* Barra Lateral (Sidebar) con Tono Suave y Borde Definido */
+    section[data-testid="stSidebar"] {{
+        background-color: var(--fondo-sidebar) !important;
+        border-right: 1px solid var(--gris-borde) !important;
     }}
-    
-    /* Encabezados */
-    h1, h2, h3, h4 {{
-        color: #124E3F !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }}
-    
-    /* Tarjetas de Métricas (stMetric) */
-    div[data-testid="stMetric"] {{
-        background-color: #FFFFFF !important;
-        border: 1px solid #E0E4E8 !important;
-        border-top: 3.5px solid #25D366 !important;
-        border-radius: 8px !important;
-        padding: 12px 16px !important;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
-    }}
-    div[data-testid="stMetricLabel"] p {{
-        color: #124E3F !important;
-        font-weight: 600 !important;
-        font-size: 0.85rem !important;
-    }}
-    div[data-testid="stMetricValue"] div {{
-        color: #222222 !important;
+    section[data-testid="stSidebar"] .stMarkdown h1, 
+    section[data-testid="stSidebar"] .stMarkdown h2, 
+    section[data-testid="stSidebar"] .stMarkdown h3, 
+    section[data-testid="stSidebar"] .stMarkdown h4 {{
+        color: var(--verde-principal) !important;
         font-weight: 700 !important;
     }}
     
-    /* Botones de Descarga */
-    .stDownloadButton > button {{
-        background-color: #124E3F !important;
+    /* Encabezados y Títulos */
+    h1, h2, h3, h4 {{
+        color: var(--verde-principal) !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+        font-weight: 700 !important;
+    }}
+    
+    /* Pestañas de Navegación (Tabs) */
+    button[data-baseweb="tab"] {{
+        font-weight: 600 !important;
+        color: var(--gris-secundario) !important;
+        background-color: transparent !important;
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }}
+    button[data-baseweb="tab"][aria-selected="true"] {{
+        color: var(--verde-principal) !important;
+        border-bottom-color: var(--verde-principal) !important;
+        border-bottom-width: 3px !important;
+    }}
+    
+    /* Tarjetas de Métricas (stMetric) con Alto Contraste */
+    div[data-testid="stMetric"] {{
+        background-color: var(--fondo-blanco) !important;
+        border: 1px solid var(--gris-borde) !important;
+        border-top: 4px solid var(--verde-acento) !important;
+        border-radius: 8px !important;
+        padding: 14px 18px !important;
+        box-shadow: 0 2px 6px rgba(18, 78, 63, 0.05) !important;
+    }}
+    div[data-testid="stMetricLabel"] p {{
+        color: var(--verde-principal) !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        letter-spacing: 0.3px !important;
+    }}
+    div[data-testid="stMetricValue"] div {{
+        color: var(--gris-texto) !important;
+        font-weight: 700 !important;
+    }}
+    
+    /* Cajas Informativas (Alertas) */
+    div[data-testid="stAlert"] {{
+        border-radius: 8px !important;
+        border: 1px solid #C5E1D4 !important;
+        background-color: var(--verde-fondo-suave) !important;
+        color: var(--verde-principal) !important;
+    }}
+    
+    /* Botones Principales y de Descarga */
+    .stButton > button, .stDownloadButton > button {{
+        background-color: var(--verde-principal) !important;
         color: #FFFFFF !important;
         border: none !important;
         border-radius: 6px !important;
         font-weight: 600 !important;
+        padding: 8px 18px !important;
         transition: all 0.2s ease !important;
     }}
-    .stDownloadButton > button:hover {{
-        background-color: #1a6b57 !important;
-        box-shadow: 0 2px 8px rgba(18, 78, 63, 0.3) !important;
+    .stButton > button:hover, .stDownloadButton > button:hover {{
+        background-color: var(--verde-medio) !important;
+        box-shadow: 0 3px 10px rgba(18, 78, 63, 0.25) !important;
+        transform: translateY(-1px);
+    }}
+    
+    /* Dataframes y Tablas en Pantalla */
+    div[data-testid="stDataFrame"] {{
+        border: 1px solid var(--gris-borde) !important;
+        border-radius: 8px !important;
+        background-color: var(--fondo-blanco) !important;
     }}
 
     /* Estilos de Impresión / Conversión a PDF */
@@ -105,22 +151,21 @@ st.markdown(f"""
             padding-top: 40px;
             padding-left: 35pt;
             padding-right: 35pt;
+            background-color: #FFFFFF !important;
         }}
         .main .block-container {{
             padding-left: 35pt !important;
             padding-right: 35pt !important;
             max-width: 100% !important;
         }}
-        #logo-header {{
-            position: fixed;
-            top: 0px;
-            right: 35pt;
-        }}
     }}
 </style>
-
-{f'<div id="logo-header"><img src="{logo_b64}" alt="Logo CLC" /></div>' if logo_b64 else ''}
 """, unsafe_allow_html=True)
+
+# 1. Logo Corporativo en la parte superior de la barra lateral
+if os.path.exists(logo_web_path):
+    st.sidebar.image(logo_web_path, use_container_width=True)
+    st.sidebar.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
 st.title("🟢 Dashboard de Ventas & Performance - CLC Mercado Libre")
 st.caption("Datos consolidados desde Google Sheets (BDD API MELI)")
