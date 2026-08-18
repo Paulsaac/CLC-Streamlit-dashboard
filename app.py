@@ -8,6 +8,7 @@ import plotly.io as pio
 import numpy as np
 from data_loader import load_all_data
 from pdf_generator import generate_monthly_pdf_report, generate_weekly_pdf_report
+from email_service import enviar_reporte_email
 
 # Configurar plantilla clara por defecto en todos los gráficos Plotly
 pio.templates.default = "plotly_white"
@@ -20,6 +21,50 @@ def get_image_base64(image_path: str) -> str:
     with open(image_path, "rb") as img_file:
         encoded_string = base64.b64encode(img_file.read()).decode("utf-8")
     return f"data:image/png;base64,{encoded_string}"
+
+
+# ==========================================
+# FUNCIONES AUXILIARES DE FORMATEO (ESPAÑOL)
+# ==========================================
+def fmt_monto(val: float) -> str:
+    """Formatea montos en moneda con '.' de miles: $1.250.000"""
+    try:
+        return f"${float(val):,.0f}".replace(",", ".")
+    except (ValueError, TypeError):
+        return "$0"
+
+
+def fmt_entero(val) -> str:
+    """Formatea cantidades enteras con '.' de miles: 1.000"""
+    try:
+        return f"{int(val):,}".replace(",", ".")
+    except (ValueError, TypeError):
+        return "0"
+
+
+def fmt_decimal(val: float, dec: int = 2) -> str:
+    """Formatea números decimales con ',' decimal y '.' de miles: 1.234,56"""
+    try:
+        formatted = f"{float(val):,.{dec}f}"
+        return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+    except (ValueError, TypeError):
+        return "0,00"
+
+
+def fmt_roas(val: float) -> str:
+    """Formatea multiplicadores ROAS con ',' decimal: 2,15x"""
+    try:
+        return f"{float(val):.2f}x".replace(".", ",")
+    except (ValueError, TypeError):
+        return "0,00x"
+
+
+def fmt_porcentaje(val: float, dec: int = 1) -> str:
+    """Formatea porcentajes con ',' decimal: 12,5%"""
+    try:
+        return f"{float(val):.{dec}f}%".replace(".", ",")
+    except (ValueError, TypeError):
+        return "0,0%"
 
 # 1. Configuración de la página
 st.set_page_config(
@@ -271,6 +316,42 @@ try:
 except Exception as pdf_m_err:
     st.sidebar.error(f"Error generando PDF Mensual: {pdf_m_err}")
 
+# Módulo de Envío por Correo Electrónico
+st.sidebar.divider()
+st.sidebar.subheader("📧 Enviar Reporte por Correo")
+correo_destino = st.sidebar.text_input(
+    "Correo del Destinatario",
+    value="cliente@empresa.com",
+    help="Ingresa la dirección de correo a la que deseas enviar el reporte PDF."
+)
+
+if st.sidebar.button("Generar PDF y Enviar por Correo", use_container_width=True):
+    with st.spinner("Generando reporte y enviando correo..."):
+        try:
+            ruta_archivo = "reporte_semanal_clc.pdf"
+            
+            # Generar bytes del PDF semanal si aún no existen
+            if 'pdf_weekly_bytes' not in locals() or pdf_weekly_bytes is None:
+                pdf_weekly_bytes = generate_weekly_pdf_report(
+                    df_semana=df_semana,
+                    df_ordenes=df_ordenes,
+                    df_catalogo=df_catalogo
+                )
+                
+            # Guardar el PDF en la ruta de archivo local
+            with open(ruta_archivo, "wb") as f:
+                f.write(pdf_weekly_bytes)
+
+            # Enviar el correo usando email_service
+            exito = enviar_reporte_email(ruta_archivo, correo_destino)
+
+            if exito:
+                st.sidebar.success(f"✅ Reporte enviado exitosamente a: {correo_destino}")
+            else:
+                st.sidebar.error("❌ Error al enviar el correo. Revisa EMAIL_USER/EMAIL_PASSWORD en secrets.toml y la consola.")
+        except Exception as e:
+            st.sidebar.error(f"❌ Error durante el proceso: {e}")
+
 # 5. Pestañas de Navegación del Dashboard
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Resumen Ejecutivo", "🛍️ Órdenes", "📦 Catálogo", "📣 Mercado Ads", "🗓️ Última Semana"])
 
@@ -290,11 +371,11 @@ with tab1:
             roas_prom = roas_vals.mean()
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Ingresos Totales", f"${tot_ingresos:,.0f}")
-    c2.metric("Total Órdenes", f"{tot_ordenes:,}")
-    c3.metric("Unidades Vendidas", f"{tot_unidades:,}")
-    c4.metric("Ticket Promedio", f"${ticket_prom:,.0f}")
-    c5.metric("ROAS Promedio", f"{roas_prom:.2f}x")
+    c1.metric("Ingresos Totales", fmt_monto(tot_ingresos))
+    c2.metric("Total Órdenes", fmt_entero(tot_ordenes))
+    c3.metric("Unidades Vendidas", fmt_entero(tot_unidades))
+    c4.metric("Ticket Promedio", fmt_monto(ticket_prom))
+    c5.metric("ROAS Promedio", fmt_roas(roas_prom))
 
     st.divider()
 
@@ -312,6 +393,10 @@ with tab1:
                 labels={"Ingresos Generados": "Ingresos ($)", "Fecha Inicio Semana": "Semana"}
             )
             fig_ing.update_traces(line_color="#124E3F", line_width=3)
+            fig_ing.update_layout(
+                separators=",.",
+                yaxis=dict(tickformat="$,.0f", title="Ingresos ($)")
+            )
             st.plotly_chart(fig_ing, use_container_width=True)
         else:
             st.info("No hay información semanal disponible.")
@@ -336,8 +421,9 @@ with tab1:
             ))
             fig_vis.update_layout(
                 title="Visitas vs. Operaciones Concretadas",
-                yaxis=dict(title="Visitas Totales"),
-                yaxis2=dict(title="Operaciones", overlaying="y", side="right"),
+                separators=",.",
+                yaxis=dict(title="Visitas Totales", tickformat=",.0f"),
+                yaxis2=dict(title="Operaciones", overlaying="y", side="right", tickformat=",.0f"),
                 legend=dict(x=0.01, y=0.99)
             )
             st.plotly_chart(fig_vis, use_container_width=True)
@@ -362,6 +448,10 @@ with tab2:
                     labels={"Total": "Ingresos ($)", "Dia Semana": "Día"},
                     color='Total',
                     color_continuous_scale='Greens'
+                )
+                fig_dias.update_layout(
+                    separators=",.",
+                    yaxis=dict(tickformat="$,.0f", title="Ingresos ($)")
                 )
                 st.plotly_chart(fig_dias, use_container_width=True)
         
@@ -394,6 +484,12 @@ with tab3:
                     values='Visitas Totales',
                     title="Distribución de Visitas por Marca"
                 )
+                fig_marca.update_traces(
+                    texttemplate="%{label}<br><b>%{value:,.0f}</b> (%{percent:.1%})",
+                    textposition="inside",
+                    insidetextorientation="horizontal"
+                )
+                fig_marca.update_layout(separators=",.")
                 st.plotly_chart(fig_marca, use_container_width=True)
 
         if 'Categoria MeLi' in df_catalogo.columns and 'Visitas Totales' in df_catalogo.columns:
@@ -407,6 +503,11 @@ with tab3:
                     title="Visitas por Categoria MeLi"
                 )
                 fig_cat.update_traces(marker_color="#124E3F")
+                fig_cat.update_layout(
+                    separators=",.",
+                    xaxis=dict(tickformat=",.0f", title="Visitas Totales"),
+                    yaxis_title="Categoría MeLi"
+                )
                 st.plotly_chart(fig_cat, use_container_width=True)
 
         st.dataframe(df_catalogo, use_container_width=True, hide_index=True)
@@ -426,6 +527,11 @@ with tab4:
             labels={"value": "Monto ($)", "variable": "Concepto", "Fecha Inicio Semana": "Semana"},
             color_discrete_map={"Gasto Publicitario": "#A5D6A7", "Ingresos por Ads": "#124E3F"}
         )
+        fig_ads.update_layout(
+            separators=",.",
+            yaxis=dict(tickformat="$,.0f", title="Monto ($)"),
+            xaxis_title="Semana"
+        )
         st.plotly_chart(fig_ads, use_container_width=True)
         
         if 'ROAS' in df_semana.columns:
@@ -438,6 +544,11 @@ with tab4:
                 labels={"ROAS": "ROAS (Multiplicador)", "Fecha Inicio Semana": "Semana"}
             )
             fig_roas.update_traces(line_color="#25D366", line_width=3)
+            fig_roas.update_layout(
+                separators=",.",
+                yaxis=dict(ticksuffix="x", tickformat=",.2f", title="ROAS (Multiplicador)"),
+                xaxis_title="Semana"
+            )
             st.plotly_chart(fig_roas, use_container_width=True)
     else:
         st.info("No hay datos disponibles sobre la pauta publicitaria.")
@@ -493,19 +604,19 @@ with tab5:
         
         roas_act = float(last_row.get('ROAS', 0.0))
         roas_prev = float(prev_row.get('ROAS', 0.0)) if prev_row is not None else 0.0
-        delta_roas = f"{(roas_act - roas_prev):+.2f}x vs. semana anterior" if prev_row is not None else None
+        delta_roas = f"{(roas_act - roas_prev):+.2f}x".replace(".", ",") + " vs. semana anterior" if prev_row is not None else None
         
         gasto_act = float(last_row.get('Gasto Publicitario', 0.0))
         gasto_prev = float(prev_row.get('Gasto Publicitario', 0.0)) if prev_row is not None else 0.0
         delta_gasto = f"{((gasto_act - gasto_prev) / gasto_prev * 100):+.0f}% vs. semana anterior" if gasto_prev > 0 else None
 
         k1, k2, k3, k4, k5, k6 = st.columns(6)
-        k1.metric("Ingresos Totales", f"${ing_act:,.0f}", delta=delta_ing)
-        k2.metric("Operaciones", f"{ops_act:,}", delta=delta_ops)
-        k3.metric("Unidades Vendidas", f"{uni_act:,}", delta=delta_uni)
-        k4.metric("Visitas Totales", f"{vis_act:,}", delta=delta_vis)
-        k5.metric("ROAS Ads", f"{roas_act:.2f}x", delta=delta_roas)
-        k6.metric("Gasto Ads", f"${gasto_act:,.0f}", delta=delta_gasto, delta_color="inverse")
+        k1.metric("Ingresos Totales", fmt_monto(ing_act), delta=delta_ing)
+        k2.metric("Operaciones", fmt_entero(ops_act), delta=delta_ops)
+        k3.metric("Unidades Vendidas", fmt_entero(uni_act), delta=delta_uni)
+        k4.metric("Visitas Totales", fmt_entero(vis_act), delta=delta_vis)
+        k5.metric("ROAS Ads", fmt_roas(roas_act), delta=delta_roas)
+        k6.metric("Gasto Ads", fmt_monto(gasto_act), delta=delta_gasto, delta_color="inverse")
         
         st.divider()
         
@@ -542,15 +653,30 @@ with tab5:
             else:
                 ventas_dia_last = df_base_dias
             
+            # Formatear etiquetas sobre las barras con 'm' minúscula para miles (ej. $160m)
+            ventas_dia_last['Texto_Barra'] = ventas_dia_last['Total'].apply(
+                lambda x: f"${x/1000:.0f}m".replace(",", ".") if x >= 1000 else (f"${x:.0f}" if x > 0 else "")
+            )
+            
             fig_dia_last = px.bar(
                 ventas_dia_last,
                 x='Dia_ES',
                 y='Total',
+                text='Texto_Barra',
                 title=f"Ingresos por Día de la Semana ({periodo_actual})",
                 labels={'Total': 'Ingresos ($)', 'Dia_ES': 'Día'},
                 color_discrete_sequence=['#124E3F']
             )
-            fig_dia_last.update_layout(xaxis_title="Día de la Semana", yaxis_title="Ingresos ($)")
+            fig_dia_last.update_traces(
+                textposition='outside',
+                textfont=dict(size=11.5, color='#222222', family='Segoe UI, Arial, sans-serif')
+            )
+            fig_dia_last.update_layout(
+                xaxis_title="Día de la Semana",
+                yaxis_title="Ingresos ($)",
+                separators=",.",
+                yaxis=dict(tickformat="$,.0f")
+            )
             st.plotly_chart(fig_dia_last, use_container_width=True)
                 
         with col_g2:
@@ -568,14 +694,15 @@ with tab5:
                     names="Canal",
                     values="Monto",
                     title=f"Distribución de Ingresos ({periodo_actual})",
-                    hole=0.38,
+                    hole=0.42,
                     color="Canal",
                     color_discrete_map={"Mercado Ads": "#1E824C", "Ventas Orgánicas": "#124E3F"}
                 )
                 fig_mix.update_traces(
-                    texttemplate="%{label}<br>%{percent:.0%}",
+                    texttemplate="%{label}<br><b>%{percent:.0%}</b>",
                     textposition="inside",
-                    textfont=dict(color="#FFFFFF", size=13, family="Segoe UI, Arial, sans-serif")
+                    insidetextorientation="horizontal",
+                    textfont=dict(color="#FFFFFF", size=12, family="Segoe UI, Arial, sans-serif")
                 )
                 st.plotly_chart(fig_mix, use_container_width=True)
             else:
@@ -600,7 +727,7 @@ with tab5:
                         .head(10)
                     )
                     st.dataframe(
-                        top_prod_last.style.format({'Total': '${:,.0f}', 'Unidades': '{:,.0f}'}),
+                        top_prod_last.style.format({'Total': fmt_monto, 'Unidades': fmt_entero}),
                         use_container_width=True,
                         hide_index=True
                     )
@@ -614,13 +741,13 @@ with tab5:
                         df_ord_m.groupby('Marca')
                         .agg(
                             Unidades=('Cantidad Total', 'sum') if 'Cantidad Total' in df_ord_m.columns else ('Order ID', 'count'),
-                            Total=('Total', 'sum') if 'Total' in df_ord_m.columns else ('Order ID', 'count')
+                            Total=('Total', 'sum') if 'Total' in df_ord_last.columns else ('Order ID', 'count')
                         )
                         .reset_index()
                         .sort_values(by='Total', ascending=False)
                     )
                     st.dataframe(
-                        top_marcas_last.style.format({'Total': '${:,.0f}', 'Unidades': '{:,.0f}'}),
+                        top_marcas_last.style.format({'Total': fmt_monto, 'Unidades': fmt_entero}),
                         use_container_width=True,
                         hide_index=True
                     )

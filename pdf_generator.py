@@ -52,32 +52,73 @@ def sanitize_text(text: str) -> str:
 # FORMATEADORES NUMÉRICOS EN ESPAÑOL
 # ==========================================
 
+def fmt_monto(val: float) -> str:
+    """Formatea valores monetarios enteros con '.' de miles: $1.250.000"""
+    try:
+        return f"${float(val):,.0f}".replace(",", ".")
+    except (ValueError, TypeError):
+        return "$0"
+
+
+def fmt_entero(val) -> str:
+    """Formatea cantidades enteras con '.' de miles: 1.000"""
+    try:
+        return f"{int(val):,}".replace(",", ".")
+    except (ValueError, TypeError):
+        return "0"
+
+
+def fmt_decimal(val: float, dec: int = 2) -> str:
+    """Formatea números decimales con ',' decimal y '.' de miles: 1.234,56"""
+    try:
+        formatted = f"{float(val):,.{dec}f}"
+        return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+    except (ValueError, TypeError):
+        return "0,00"
+
+
+def fmt_roas(val: float) -> str:
+    """Formatea ROAS con ',' decimal: 2,15x"""
+    try:
+        return f"{float(val):.2f}x".replace(".", ",")
+    except (ValueError, TypeError):
+        return "0,00x"
+
+
+def fmt_porcentaje(val: float, dec: int = 1) -> str:
+    """Formatea porcentajes con ',' decimal: 12,5%"""
+    try:
+        return f"{float(val):.{dec}f}%".replace(".", ",")
+    except (ValueError, TypeError):
+        return "0,0%"
+
+
 def format_currency_es(val, pos=None):
-    """Formatea valores monetarios: miles con ' mil' y millones con 'M' sin decimales."""
+    """Formatea valores monetarios: miles con 'm' y millones con 'M' sin decimales y punto de miles."""
     abs_val = abs(val)
     sign = "-" if val < 0 else ""
     if abs_val >= 1_000_000:
-        num_str = f"{abs_val / 1_000_000:.0f}"
+        num_str = f"{abs_val / 1_000_000:.0f}".replace(",", ".")
         return f"{sign}${num_str}M"
     elif abs_val >= 1_000:
-        num_str = f"{abs_val / 1_000:.0f}"
-        return f"{sign}${num_str} mil"
+        num_str = f"{abs_val / 1_000:.0f}".replace(",", ".")
+        return f"{sign}${num_str}m"
     else:
-        return f"{sign}${abs_val:,.0f}"
+        return f"{sign}${abs_val:,.0f}".replace(",", ".")
 
 
 def format_number_es(val, pos=None):
-    """Formatea cantidades numéricas: miles con ' mil' y millones con 'M' sin decimales."""
+    """Formatea cantidades numéricas: miles con 'm' y millones con 'M' sin decimales y punto de miles."""
     abs_val = abs(val)
     sign = "-" if val < 0 else ""
     if abs_val >= 1_000_000:
-        num_str = f"{abs_val / 1_000_000:.0f}"
+        num_str = f"{abs_val / 1_000_000:.0f}".replace(",", ".")
         return f"{sign}{num_str}M"
     elif abs_val >= 1_000:
-        num_str = f"{abs_val / 1_000:.0f}"
-        return f"{sign}{num_str} mil"
+        num_str = f"{abs_val / 1_000:.0f}".replace(",", ".")
+        return f"{sign}{num_str}m"
     else:
-        return f"{sign}{abs_val:,.0f}"
+        return f"{sign}{abs_val:,.0f}".replace(",", ".")
 
 
 # ==========================================
@@ -181,10 +222,12 @@ def make_roas_trend_chart(df_semana: pd.DataFrame) -> io.BytesIO:
     roas_vals = df_plot["ROAS"]
 
     ax.plot(x_labels, roas_vals, marker="^", color="#25D366", linewidth=2.2, markersize=5.5)
-    ax.axhline(roas_vals.mean(), color="#124E3F", linestyle=":", linewidth=1.3, label=f"Media: {roas_vals.mean():.2f}x")
+    mean_roas_str = f"{roas_vals.mean():.2f}x".replace(".", ",")
+    ax.axhline(roas_vals.mean(), color="#124E3F", linestyle=":", linewidth=1.3, label=f"Media: {mean_roas_str}")
 
     for i, txt in enumerate(roas_vals):
-        ax.annotate(f"{txt:.1f}x", (i, roas_vals.iloc[i]), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=6.8, color="#124E3F", fontweight="bold")
+        lbl_roas = f"{txt:.1f}x".replace(".", ",")
+        ax.annotate(lbl_roas, (i, roas_vals.iloc[i]), textcoords="offset points", xytext=(0, 6), ha="center", fontsize=6.8, color="#124E3F", fontweight="bold")
 
     ax.set_title("Evolución del ROAS Semanal (Multiplicador)", fontsize=9.5, fontweight="bold", color="#124E3F", pad=8)
     ax.set_ylabel("ROAS (x)", fontsize=8, color="#222222")
@@ -521,12 +564,12 @@ def generate_monthly_pdf_report(
             ingresos_ads_total = df_semana["Ingresos por Ads"].sum()
 
     kpi_cards = [
-        ("Ingresos Totales", f"${tot_ingresos:,.0f}", "Facturación acumulada"),
-        ("Total de Órdenes", f"{tot_ordenes:,}", "Transacciones concretadas"),
-        ("Unidades Vendidas", f"{tot_unidades:,}", "Volumen de artículos"),
-        ("Ticket Promedio", f"${ticket_prom:,.0f}", "Ingreso promedio por orden"),
-        ("ROAS Promedio Ads", f"{roas_prom:.2f}x", "Retorno sobre inversión"),
-        ("Visitas Totales", f"{tot_visitas:,}", "Tráfico global acumulado"),
+        ("Ingresos Totales", fmt_monto(tot_ingresos), "Facturación acumulada"),
+        ("Total de Órdenes", fmt_entero(tot_ordenes), "Transacciones concretadas"),
+        ("Unidades Vendidas", fmt_entero(tot_unidades), "Volumen de artículos"),
+        ("Ticket Promedio", fmt_monto(ticket_prom), "Ingreso promedio por orden"),
+        ("ROAS Promedio Ads", fmt_roas(roas_prom), "Retorno sobre inversión"),
+        ("Visitas Totales", fmt_entero(tot_visitas), "Tráfico global acumulado"),
     ]
 
     pdf.section_heading("1. Resumen Ejecutivo & Indicadores Clave (KPIs)", "Principales métricas consolidadas del período")
@@ -555,28 +598,30 @@ def generate_monthly_pdf_report(
     channel_widths = [50, 35, 25, 40, 36]
     channel_aligns = ["L", "R", "R", "R", "R"]
 
+    roas_ads_calc = fmt_roas(ingresos_ads_total / gasto_ads_total) if gasto_ads_total > 0 else "0,00x"
+
     channel_rows = [
         [
             "Canal Publicitario (Mercado Ads)",
-            f"${ingresos_ads_total:,.0f}",
-            f"{pct_ads:.1f}%",
-            f"${gasto_ads_total:,.0f}",
-            f"{(ingresos_ads_total / gasto_ads_total):.2f}x" if gasto_ads_total > 0 else "0.00x",
+            fmt_monto(ingresos_ads_total),
+            fmt_porcentaje(pct_ads),
+            fmt_monto(gasto_ads_total),
+            roas_ads_calc,
         ],
         [
             "Canal Orgánico & Directo",
-            f"${ingresos_organicos_total:,.0f}",
-            f"{pct_org:.1f}%",
+            fmt_monto(ingresos_organicos_total),
+            fmt_porcentaje(pct_org),
             "$0",
             "N/A",
         ],
     ]
     channel_totals = [
         "Total Consolidado",
-        f"${tot_ingresos:,.0f}",
-        "100.0%",
-        f"${gasto_ads_total:,.0f}",
-        f"{roas_prom:.2f}x",
+        fmt_monto(tot_ingresos),
+        "100,0%",
+        fmt_monto(gasto_ads_total),
+        fmt_roas(roas_prom),
     ]
     pdf.render_table(channel_headers, channel_rows, channel_widths, channel_aligns, channel_totals)
 
@@ -614,12 +659,12 @@ def generate_monthly_pdf_report(
 
             sem_rows.append([
                 periodo,
-                f"{visitas:,}",
-                f"{operaciones:,}",
-                f"${ingresos:,.0f}",
-                f"${gasto_ads:,.0f}",
-                f"${ing_ads:,.0f}",
-                f"{roas_val:.2f}x",
+                fmt_entero(visitas),
+                fmt_entero(operaciones),
+                fmt_monto(ingresos),
+                fmt_monto(gasto_ads),
+                fmt_monto(ing_ads),
+                fmt_roas(roas_val),
             ])
 
         total_vis_sem = df_sem_display["Visitas Totales"].sum() if "Visitas Totales" in df_sem_display.columns else 0
@@ -631,12 +676,12 @@ def generate_monthly_pdf_report(
 
         sem_totals = [
             "Total Muestra",
-            f"{int(total_vis_sem):,}",
-            f"{int(total_ops_sem):,}",
-            f"${total_ing_sem:,.0f}",
-            f"${total_gasto_sem:,.0f}",
-            f"${total_ing_ads_sem:,.0f}",
-            f"{roas_calc_sem:.2f}x",
+            fmt_entero(total_vis_sem),
+            fmt_entero(total_ops_sem),
+            fmt_monto(total_ing_sem),
+            fmt_monto(total_gasto_sem),
+            fmt_monto(total_ing_ads_sem),
+            fmt_roas(roas_calc_sem),
         ]
         pdf.render_table(sem_headers, sem_rows, sem_widths, sem_aligns, sem_totals)
 
@@ -666,16 +711,16 @@ def generate_monthly_pdf_report(
             pct = (vis / tot_cat_visitas * 100) if tot_cat_visitas > 0 else 0.0
             cat_rows.append([
                 str(r["Categoria MeLi"])[:45],
-                f"{int(r['Publicaciones']):,}",
-                f"{vis:,}",
-                f"{pct:.1f}%",
+                fmt_entero(r["Publicaciones"]),
+                fmt_entero(vis),
+                fmt_porcentaje(pct),
             ])
 
         cat_totals = [
             "Total Catálogo General",
-            f"{len(df_catalogo):,}",
-            f"{int(tot_cat_visitas):,}",
-            "100.0%",
+            fmt_entero(len(df_catalogo)),
+            fmt_entero(tot_cat_visitas),
+            "100,0%",
         ]
         pdf.render_table(cat_headers, cat_rows, cat_widths, cat_aligns, cat_totals)
 
@@ -734,19 +779,19 @@ def generate_weekly_pdf_report(
 
     roas_act = float(last_row.get("ROAS", 0.0))
     roas_prev = float(prev_row.get("ROAS", 0.0)) if prev_row is not None else 0.0
-    delta_roas = f"{(roas_act - roas_prev):+.2f}x vs. semana anterior" if prev_row is not None else "vs. semana anterior N/A"
+    delta_roas = f"{(roas_act - roas_prev):+.2f}x".replace(".", ",") + " vs. semana anterior" if prev_row is not None else "vs. semana anterior N/A"
 
     gasto_act = float(last_row.get("Gasto Publicitario", 0.0))
     gasto_prev = float(prev_row.get("Gasto Publicitario", 0.0)) if prev_row is not None else 0.0
     delta_gasto = f"{((gasto_act - gasto_prev) / gasto_prev * 100):+.0f}% vs. semana anterior" if gasto_prev > 0 else "vs. semana anterior N/A"
 
     kpi_cards = [
-        ("Ingresos Totales", f"${ing_act:,.0f}", f"Var: {delta_ing}"),
-        ("Operaciones Concretadas", f"{ops_act:,}", f"Var: {delta_ops}"),
-        ("Unidades Vendidas", f"{uni_act:,}", f"Var: {delta_uni}"),
-        ("Visitas Totales", f"{vis_act:,}", f"Var: {delta_vis}"),
-        ("ROAS Mercado Ads", f"{roas_act:.2f}x", f"Var: {delta_roas}"),
-        ("Gasto Publicitario", f"${gasto_act:,.0f}", f"Var: {delta_gasto}"),
+        ("Ingresos Totales", fmt_monto(ing_act), f"Var: {delta_ing}"),
+        ("Operaciones Concretadas", fmt_entero(ops_act), f"Var: {delta_ops}"),
+        ("Unidades Vendidas", fmt_entero(uni_act), f"Var: {delta_uni}"),
+        ("Visitas Totales", fmt_entero(vis_act), f"Var: {delta_vis}"),
+        ("ROAS Mercado Ads", fmt_roas(roas_act), f"Var: {delta_roas}"),
+        ("Gasto Publicitario", fmt_monto(gasto_act), f"Var: {delta_gasto}"),
     ]
 
     # --- SECCIÓN 1: RESUMEN DE KPIS DE LA SEMANA ---
@@ -787,28 +832,30 @@ def generate_weekly_pdf_report(
     ch_widths = [55, 38, 25, 36, 32]
     ch_aligns = ["L", "R", "R", "R", "R"]
 
+    roas_ads_sem_calc = fmt_roas(ing_ads / gasto_act) if gasto_act > 0 else "0,00x"
+
     ch_rows = [
         [
             "Canal Publicitario (Mercado Ads)",
-            f"${ing_ads:,.0f}",
-            f"{pct_ads:.1f}%",
-            f"${gasto_act:,.0f}",
-            f"{(ing_ads / gasto_act):.2f}x" if gasto_act > 0 else "0.00x",
+            fmt_monto(ing_ads),
+            fmt_porcentaje(pct_ads),
+            fmt_monto(gasto_act),
+            roas_ads_sem_calc,
         ],
         [
             "Canal Orgánico & Directo",
-            f"${ing_org:,.0f}",
-            f"{pct_org:.1f}%",
+            fmt_monto(ing_org),
+            fmt_porcentaje(pct_org),
             "$0",
             "N/A",
         ],
     ]
     ch_totals = [
         "Total Semana",
-        f"${ing_act:,.0f}",
-        "100.0%",
-        f"${gasto_act:,.0f}",
-        f"{roas_act:.2f}x",
+        fmt_monto(ing_act),
+        "100,0%",
+        fmt_monto(gasto_act),
+        fmt_roas(roas_act),
     ]
     pdf.render_table(ch_headers, ch_rows, ch_widths, ch_aligns, ch_totals)
 
@@ -862,18 +909,18 @@ def generate_weekly_pdf_report(
         pct_d = (ing_d / tot_dia_ing * 100) if tot_dia_ing > 0 else 0.0
         dia_rows.append([
             str(r["Dia_ES"]),
-            f"{int(r['Transacciones']):,}",
-            f"{int(r['Unidades']):,}",
-            f"${ing_d:,.0f}",
-            f"{pct_d:.1f}%",
+            fmt_entero(r['Transacciones']),
+            fmt_entero(r['Unidades']),
+            fmt_monto(ing_d),
+            fmt_porcentaje(pct_d),
         ])
 
     dia_totals = [
         "Total Semanal",
-        f"{int(ventas_dia['Transacciones'].sum()):,}",
-        f"{int(ventas_dia['Unidades'].sum()):,}",
-        f"${tot_dia_ing:,.0f}",
-        "100.0%",
+        fmt_entero(ventas_dia['Transacciones'].sum()),
+        fmt_entero(ventas_dia['Unidades'].sum()),
+        fmt_monto(tot_dia_ing),
+        "100,0%",
     ]
     pdf.render_table(dia_headers, dia_rows, dia_widths, dia_aligns, dia_totals)
 
@@ -902,16 +949,16 @@ def generate_weekly_pdf_report(
             pct_p = (tot_p / ing_act * 100) if ing_act > 0 else 0.0
             prod_rows.append([
                 str(r["Producto(s)"])[:50],
-                f"{int(r['Unidades']):,}",
-                f"${tot_p:,.0f}",
-                f"{pct_p:.1f}%",
+                fmt_entero(r['Unidades']),
+                fmt_monto(tot_p),
+                fmt_porcentaje(pct_p),
             ])
 
         prod_totals = [
             "Total Top Productos",
-            f"{int(top_prod['Unidades'].sum()):,}",
-            f"${top_prod['Total'].sum():,.0f}",
-            f"{(top_prod['Total'].sum() / ing_act * 100):.1f}%" if ing_act > 0 else "0.0%",
+            fmt_entero(top_prod['Unidades'].sum()),
+            fmt_monto(top_prod['Total'].sum()),
+            fmt_porcentaje(top_prod['Total'].sum() / ing_act * 100) if ing_act > 0 else "0,0%",
         ]
         pdf.render_table(prod_headers, prod_rows, prod_widths, prod_aligns, prod_totals)
 
@@ -942,16 +989,16 @@ def generate_weekly_pdf_report(
             pct_m = (tot_m / ing_act * 100) if ing_act > 0 else 0.0
             marca_rows.append([
                 str(r["Marca"])[:50],
-                f"{int(r['Unidades']):,}",
-                f"${tot_m:,.0f}",
-                f"{pct_m:.1f}%",
+                fmt_entero(r['Unidades']),
+                fmt_monto(tot_m),
+                fmt_porcentaje(pct_m),
             ])
 
         marca_totals = [
             "Total Marcas",
-            f"{int(top_marcas['Unidades'].sum()):,}",
-            f"${top_marcas['Total'].sum():,.0f}",
-            f"{(top_marcas['Total'].sum() / ing_act * 100):.1f}%" if ing_act > 0 else "0.0%",
+            fmt_entero(top_marcas['Unidades'].sum()),
+            fmt_monto(top_marcas['Total'].sum()),
+            fmt_porcentaje(top_marcas['Total'].sum() / ing_act * 100) if ing_act > 0 else "0,0%",
         ]
         pdf.render_table(marca_headers, marca_rows, marca_widths, marca_aligns, marca_totals)
 
