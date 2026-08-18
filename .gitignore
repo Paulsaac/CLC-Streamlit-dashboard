@@ -1,0 +1,12 @@
+# Streamlit secrets file - NEVER commit to git
+.streamlit/secrets.toml
+
+# Python cache & virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+.env
