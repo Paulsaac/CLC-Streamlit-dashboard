@@ -2,9 +2,8 @@ name: Envio Automatico de Reporte Semanal
 
 on:
   schedule:
-    # Programación: 13:40 y 13:45 hora local (17:40 y 17:45 UTC)
-    - cron: '40 17 * * *'
-    - cron: '45 17 * * *'
+    # Programación semanal: Todos los lunes a las 08:00 AM (12:00 UTC)
+    - cron: '0 12 * * 1'
   
   # Permite probar y ejecutar el envío manualmente desde la web de GitHub con un clic
   workflow_dispatch:
