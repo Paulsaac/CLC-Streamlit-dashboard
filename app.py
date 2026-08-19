@@ -295,6 +295,15 @@ st.markdown(f"""
         color: var(--verde-principal) !important;
     }}
     
+    /* Reducir tamaño de fuente en Dataframes (Tablas de Streamlit) */
+    div[data-testid="stDataFrame"],
+    div[data-testid="stTable"] {{
+        font-size: 11px !important;
+    }}
+    div[data-testid="stDataFrame"] * {{
+        font-size: 11px !important;
+    }}
+    
     /* Botones Principales en el panel principal */
     .main .stButton > button, .main .stDownloadButton > button {{
         background-color: var(--verde-principal) !important;
@@ -624,7 +633,23 @@ with main_tab_semanal:
                     mime="text/csv"
                 )
 
-            st.dataframe(df_ordenes_tab, use_container_width=True, hide_index=True)
+            cols_ordenes_vista = [c for c in ['Order ID', 'Fecha', 'Producto(s)', 'Total', 'Cantidad Total', 'Estado'] if c in df_ordenes_tab.columns]
+            if not cols_ordenes_vista:
+                cols_ordenes_vista = list(df_ordenes_tab.columns)
+
+            st.dataframe(
+                df_ordenes_tab[cols_ordenes_vista],
+                column_config={
+                    "Total": st.column_config.NumberColumn("Total ($)", format="$%,.0f"),
+                    "Cantidad Total": st.column_config.NumberColumn("Unidades", format="%,.0f"),
+                    "Fecha": st.column_config.DatetimeColumn("Fecha", format="DD/MM/YYYY HH:mm"),
+                    "Producto(s)": st.column_config.TextColumn("Producto(s)", width="large"),
+                    "Order ID": st.column_config.TextColumn("Order ID", width="small"),
+                    "Estado": st.column_config.TextColumn("Estado", width="small")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
         else:
             st.info("No se encontraron órdenes para los filtros seleccionados.")
 
