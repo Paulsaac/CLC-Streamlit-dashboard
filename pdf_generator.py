@@ -286,6 +286,59 @@ def make_daily_sales_bar_chart(df_ord_week: pd.DataFrame, periodo_str: str) -> i
     return fig_to_bytes(fig)
 
 
+def make_monthly_revenue_bar_chart(df_mensual: pd.DataFrame) -> io.BytesIO:
+    """Gráfico de barras: Facturación mensual consolidada (12 meses)."""
+    fig, ax = plt.subplots(figsize=(6.2, 2.7))
+    x_labels = df_mensual["Mes_Label"].tolist() if "Mes_Label" in df_mensual.columns else [f"M{i+1}" for i in range(len(df_mensual))]
+    y_vals = df_mensual["Ingresos"].tolist() if "Ingresos" in df_mensual.columns else [0] * len(x_labels)
+
+    bars = ax.bar(x_labels, y_vals, color="#124E3F", alpha=0.9, width=0.55)
+    for bar in bars:
+        yval = bar.get_height()
+        if yval > 0:
+            label_fmt = format_currency_es(yval)
+            ax.text(bar.get_x() + bar.get_width()/2.0, yval + (yval * 0.02), label_fmt, ha="center", va="bottom", fontsize=6.5, fontweight="bold", color="#222222")
+
+    ax.set_title("Facturación Mensual Consolidada ($)", fontsize=9.5, fontweight="bold", color="#124E3F", pad=8)
+    ax.set_ylabel("Monto ($)", fontsize=8, color="#222222")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(format_currency_es))
+    ax.tick_params(axis="x", rotation=30, labelsize=7, colors="#222222")
+    ax.tick_params(axis="y", labelsize=7.5, colors="#222222")
+    ax.grid(True, linestyle="--", alpha=0.35, color="#CCCCCC")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    return fig_to_bytes(fig)
+
+
+def make_monthly_visitas_ops_chart(df_mensual: pd.DataFrame) -> io.BytesIO:
+    """Gráfico dual: Visitas Totales Mensuales (Barras) vs Operaciones Concretadas (Línea)."""
+    fig, ax1 = plt.subplots(figsize=(6.2, 2.7))
+    x_labels = df_mensual["Mes_Label"].tolist() if "Mes_Label" in df_mensual.columns else [f"M{i+1}" for i in range(len(df_mensual))]
+    vis_vals = df_mensual["Visitas"].tolist() if "Visitas" in df_mensual.columns else [0] * len(x_labels)
+    ops_vals = df_mensual["Operaciones"].tolist() if "Operaciones" in df_mensual.columns else [0] * len(x_labels)
+
+    ax1.bar(x_labels, vis_vals, color="#124E3F", alpha=0.35, label="Visitas Totales", width=0.55)
+    ax1.set_ylabel("Visitas", fontsize=8, color="#124E3F")
+    ax1.yaxis.set_major_formatter(ticker.FuncFormatter(format_number_es))
+    ax1.tick_params(axis="x", rotation=30, labelsize=7, colors="#222222")
+    ax1.tick_params(axis="y", labelsize=7.5, colors="#124E3F")
+    ax1.grid(True, linestyle="--", alpha=0.35, color="#CCCCCC")
+
+    ax2 = ax1.twinx()
+    ax2.plot(x_labels, ops_vals, color="#25D366", linewidth=2.2, marker="s", markersize=4, label="Operaciones")
+    ax2.set_ylabel("Operaciones", fontsize=8, color="#124E3F")
+    ax2.yaxis.set_major_formatter(ticker.FuncFormatter(format_number_es))
+    ax2.tick_params(axis="y", labelsize=7.5, colors="#124E3F")
+    ax2.spines["top"].set_visible(False)
+
+    ax1.set_title("Tráfico vs. Operaciones Mensuales", fontsize=9.5, fontweight="bold", color="#124E3F", pad=8)
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    return fig_to_bytes(fig)
+
+
 def make_revenue_mix_donut_chart(ing_ads: float, ing_org: float, periodo_str: str) -> io.BytesIO:
     """Gráfico de dona: Mix de ingresos Mercado Ads vs Orgánico con anillo extra grueso y porcentajes sin decimales."""
     fig, ax = plt.subplots(figsize=(4.8, 2.8))
@@ -521,6 +574,7 @@ def generate_monthly_pdf_report(
     df_catalogo: pd.DataFrame,
     start_date=None,
     end_date=None,
+    report_type: str = "Reporte Mensual Ejecutivo",
 ) -> bytes:
     """Genera el reporte mensual consolidado en formato PDF con gráficos y métricas integradas."""
 
@@ -536,7 +590,7 @@ def generate_monthly_pdf_report(
     else:
         period_str = "Histórico Consolidado"
 
-    pdf = CLCPDFReport(period_str=period_str, report_type="Reporte Mensual Ejecutivo")
+    pdf = CLCPDFReport(period_str=period_str, report_type=report_type)
     
     # --- PÁGINA 1: RESUMEN EJECUTIVO & GRÁFICOS PRINCIPALES ---
     pdf.add_page()
@@ -723,6 +777,228 @@ def generate_monthly_pdf_report(
             "100,0%",
         ]
         pdf.render_table(cat_headers, cat_rows, cat_widths, cat_aligns, cat_totals)
+
+    return bytes(pdf.output())
+
+
+# ==========================================
+# EXPORTADOR REPORTE ANUAL (CONSOLIDADO 12 MESES)
+# ==========================================
+
+def generate_annual_pdf_report(
+    df_semana: pd.DataFrame,
+    df_ordenes: pd.DataFrame,
+    df_catalogo: pd.DataFrame,
+    start_date=None,
+    end_date=None,
+) -> bytes:
+    """Genera el reporte ejecutivo anual / histórico consolidado en formato PDF basado en la compilación de 12 meses."""
+
+    # 1. Rango de 12 meses (Agosto 2025 a Agosto 2026 o rango provisto)
+    if start_date and end_date:
+        start_12m = pd.to_datetime(start_date)
+        end_12m = pd.to_datetime(end_date)
+        period_str = f"{start_12m.strftime('%d/%m/%Y')} al {end_12m.strftime('%d/%m/%Y')}"
+    else:
+        start_12m = pd.Timestamp("2025-08-01")
+        end_12m = pd.Timestamp("2026-08-31 23:59:59")
+        period_str = "Agosto 2025 al Agosto 2026 (12 Meses)"
+
+    # Filtrar df_semana
+    if not df_semana.empty and "Fecha Inicio Semana" in df_semana.columns:
+        df_sem_12m = df_semana[
+            (df_semana['Fecha Inicio Semana'] >= start_12m) & 
+            (df_semana['Fecha Inicio Semana'] <= end_12m)
+        ].copy()
+        if df_sem_12m.empty:
+            max_dt = df_semana['Fecha Inicio Semana'].max()
+            if pd.notna(max_dt):
+                min_dt = max_dt - pd.DateOffset(months=12)
+                df_sem_12m = df_semana[df_semana['Fecha Inicio Semana'] >= min_dt].copy()
+            else:
+                df_sem_12m = df_semana.copy()
+    else:
+        df_sem_12m = df_semana.copy()
+
+    # Filtrar df_ordenes
+    if not df_ordenes.empty and "Fecha" in df_ordenes.columns:
+        df_ord_12m = df_ordenes[
+            (df_ordenes['Fecha'] >= start_12m) & 
+            (df_ordenes['Fecha'] <= end_12m)
+        ].copy()
+        if df_ord_12m.empty:
+            max_dt_ord = df_ordenes['Fecha'].max()
+            if pd.notna(max_dt_ord):
+                min_dt_ord = max_dt_ord - pd.DateOffset(months=12)
+                df_ord_12m = df_ordenes[df_ordenes['Fecha'] >= min_dt_ord].copy()
+            else:
+                df_ord_12m = df_ordenes.copy()
+    else:
+        df_ord_12m = df_ordenes.copy()
+
+    pdf = CLCPDFReport(period_str=period_str, report_type="Reporte Anual / Historico Mensual")
+    pdf.add_page()
+
+    if df_sem_12m.empty:
+        pdf.section_heading("Sin Informacion Disponible", "No se encontraron registros en el periodo de 12 meses.")
+        return bytes(pdf.output())
+
+    # 2. Agrupación mensual con Pandas
+    df_sem_12m['Mes_Periodo'] = df_sem_12m['Fecha Inicio Semana'].dt.to_period('M')
+    df_sem_12m['Mes_Inicio'] = df_sem_12m['Fecha Inicio Semana'].dt.to_period('M').dt.to_timestamp()
+
+    meses_es = {1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun", 7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"}
+    df_sem_12m['Mes_Label'] = df_sem_12m['Mes_Inicio'].apply(lambda d: f"{meses_es.get(d.month, '')} {str(d.year)[2:]}" if pd.notna(d) else "")
+
+    df_mensual = df_sem_12m.groupby(['Mes_Periodo', 'Mes_Inicio', 'Mes_Label']).agg(
+        Ingresos=('Ingresos Generados', 'sum'),
+        Operaciones=('Cantidad de Operaciones', 'sum'),
+        Unidades=('Total de Unidades Vendidas', 'sum'),
+        Visitas=('Visitas Totales', 'sum'),
+        Gasto_Ads=('Gasto Publicitario', 'sum'),
+        Ingresos_Ads=('Ingresos por Ads', 'sum'),
+        Ingresos_Org=('Ingresos Organicos', 'sum'),
+        Ventas_Ads=('Ventas Ads', 'sum')
+    ).reset_index().sort_values(by='Mes_Inicio')
+
+    df_mensual['ROAS'] = np.where(
+        df_mensual['Gasto_Ads'] > 0,
+        df_mensual['Ingresos_Ads'] / df_mensual['Gasto_Ads'],
+        0.0
+    )
+
+    # 3. KPIs del Período
+    tot_ing = df_mensual['Ingresos'].sum()
+    tot_ops = int(df_mensual['Operaciones'].sum())
+    tot_uni = int(df_mensual['Unidades'].sum())
+    tot_vis = int(df_mensual['Visitas'].sum())
+    tot_ads = df_mensual['Gasto_Ads'].sum()
+    tot_ads_ing = df_mensual['Ingresos_Ads'].sum()
+    roas_avg = (tot_ads_ing / tot_ads) if tot_ads > 0 else 0.0
+
+    kpi_cards = [
+        ("Ingresos Totales", fmt_monto(tot_ing), "Facturacion 12 meses"),
+        ("Total Operaciones", fmt_entero(tot_ops), "Transacciones concretadas"),
+        ("Unidades Vendidas", fmt_entero(tot_uni), "Articulos despachados"),
+        ("Visitas Totales", fmt_entero(tot_vis), "Trafico global consolidado"),
+        ("Gasto Publicitario", fmt_monto(tot_ads), "Inversion en Ads"),
+        ("ROAS Promedio", fmt_roas(roas_avg), "Retorno sobre inversion"),
+    ]
+
+    pdf.section_heading("1. Resumen Ejecutivo Anual (12 Meses Acumulados)", "Consolidado historico de indicadores clave de rendimiento")
+    pdf.render_kpi_cards(kpi_cards)
+
+    # 4. Gráficos Ejecutivos Mensuales
+    pdf.section_heading("2. Evolucion Mensual de Facturacion y Trafico", "Comportamiento mes a mes de los ingresos y operaciones")
+    y_pos = pdf.get_y()
+    chart_ing_m = make_monthly_revenue_bar_chart(df_mensual)
+    chart_vis_m = make_monthly_visitas_ops_chart(df_mensual)
+    pdf.image(chart_ing_m, x=12, y=y_pos, w=90)
+    pdf.image(chart_vis_m, x=106, y=y_pos, w=90)
+    pdf.set_y(y_pos + 48)
+
+    # 5. Tabla de Desglose Mensual
+    pdf.section_heading("3. Detalle Mensual Consolidado", "Desglose financiero y operativo por cada mes del periodo")
+    m_headers = ["Mes", "Ingresos ($)", "Operaciones", "Unidades", "Gasto Ads ($)", "ROAS"]
+    m_widths = [32, 36, 28, 28, 36, 26]
+    m_aligns = ["L", "R", "R", "R", "R", "R"]
+
+    m_rows = []
+    for _, r in df_mensual.iterrows():
+        m_rows.append([
+            str(r["Mes_Label"]),
+            fmt_monto(r["Ingresos"]),
+            fmt_entero(r["Operaciones"]),
+            fmt_entero(r["Unidades"]),
+            fmt_monto(r["Gasto_Ads"]),
+            fmt_roas(r["ROAS"]),
+        ])
+
+    m_totals = [
+        "Total 12 Meses",
+        fmt_monto(tot_ing),
+        fmt_entero(tot_ops),
+        fmt_entero(tot_uni),
+        fmt_monto(tot_ads),
+        fmt_roas(roas_avg),
+    ]
+    pdf.render_table(m_headers, m_rows, m_widths, m_aligns, m_totals)
+
+    # 6. Top 10 Artículos Más Vendidos en 12 Meses
+    if not df_ord_12m.empty and "Producto(s)" in df_ord_12m.columns:
+        pdf.section_heading("4. Top 10 Articulos Mas Vendidos (12 Meses)", "Ranking de productos por facturacion acumulada en el periodo")
+        top_art = (
+            df_ord_12m.groupby("Producto(s)")
+            .agg(
+                Unidades=("Cantidad Total", "sum") if "Cantidad Total" in df_ord_12m.columns else ("Order ID", "count"),
+                Total=("Total", "sum") if "Total" in df_ord_12m.columns else ("Order ID", "count"),
+            )
+            .reset_index()
+            .sort_values(by="Total", ascending=False)
+            .head(10)
+        )
+
+        art_headers = ["Producto / Publicacion", "Unidades", "Facturacion ($)", "% del Total"]
+        art_widths = [96, 26, 36, 28]
+        art_aligns = ["L", "R", "R", "R"]
+
+        art_rows = []
+        for _, r in top_art.iterrows():
+            tot_p = float(r["Total"])
+            pct_p = (tot_p / tot_ing * 100) if tot_ing > 0 else 0.0
+            art_rows.append([
+                str(r["Producto(s)"])[:50],
+                fmt_entero(r["Unidades"]),
+                fmt_monto(tot_p),
+                fmt_porcentaje(pct_p),
+            ])
+
+        art_totals = [
+            "Total Top 10",
+            fmt_entero(top_art["Unidades"].sum()),
+            fmt_monto(top_art["Total"].sum()),
+            fmt_porcentaje(top_art["Total"].sum() / tot_ing * 100) if tot_ing > 0 else "0,0%",
+        ]
+        pdf.render_table(art_headers, art_rows, art_widths, art_aligns, art_totals)
+
+    # 7. Marcas Más Vendidas en 12 Meses
+    if not df_ord_12m.empty and not df_catalogo.empty and "Item ID" in df_ord_12m.columns and "Marca" in df_catalogo.columns:
+        pdf.section_heading("5. Marcas Mas Vendidas (12 Meses)", "Distribucion de ventas por marca en el ciclo consolidado")
+        df_ord_m = df_ord_12m.merge(df_catalogo[["Item ID", "Marca"]].drop_duplicates(subset=["Item ID"]), on="Item ID", how="left")
+        df_ord_m["Marca"] = df_ord_m["Marca"].fillna("Sin Marca / Otra")
+
+        top_marcas = (
+            df_ord_m.groupby("Marca")
+            .agg(
+                Unidades=("Cantidad Total", "sum") if "Cantidad Total" in df_ord_m.columns else ("Order ID", "count"),
+                Total=("Total", "sum") if "Total" in df_ord_m.columns else ("Order ID", "count"),
+            )
+            .reset_index()
+            .sort_values(by="Total", ascending=False)
+        )
+
+        marca_headers = ["Marca", "Unidades", "Facturacion ($)", "% del Total"]
+        marca_widths = [96, 26, 36, 28]
+        marca_aligns = ["L", "R", "R", "R"]
+
+        marca_rows = []
+        for _, r in top_marcas.iterrows():
+            tot_m = float(r["Total"])
+            pct_m = (tot_m / tot_ing * 100) if tot_ing > 0 else 0.0
+            marca_rows.append([
+                str(r["Marca"])[:50],
+                fmt_entero(r["Unidades"]),
+                fmt_monto(tot_m),
+                fmt_porcentaje(pct_m),
+            ])
+
+        marca_totals = [
+            "Total Marcas",
+            fmt_entero(top_marcas["Unidades"].sum()),
+            fmt_monto(top_marcas["Total"].sum()),
+            fmt_porcentaje(top_marcas["Total"].sum() / tot_ing * 100) if tot_ing > 0 else "0,0%",
+        ]
+        pdf.render_table(marca_headers, marca_rows, marca_widths, marca_aligns, marca_totals)
 
     return bytes(pdf.output())
 
