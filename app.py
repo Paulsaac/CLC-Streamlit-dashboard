@@ -162,25 +162,32 @@ st.markdown(f"""
     /* Campos de Entrada, Selectores y Fechas en Sidebar */
     section[data-testid="stSidebar"] div[data-baseweb="input"],
     section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
-    section[data-testid="stSidebar"] div[data-baseweb="base-input"] {{
+    section[data-testid="stSidebar"] div[data-baseweb="base-input"],
+    div[data-testid="stDateInput"] div[data-baseweb="input"],
+    div[data-testid="stDateInput"] div[data-baseweb="base-input"] {{
         background-color: #FFFFFF !important;
         border: 1px solid #C5E1D4 !important;
         border-radius: 6px !important;
         color: #000000 !important;
     }}
 
-    section[data-testid="stSidebar"] input {{
+    section[data-testid="stSidebar"] input,
+    div[data-testid="stDateInput"] input {{
         color: #000000 !important;
         background-color: #FFFFFF !important;
         -webkit-text-fill-color: #000000 !important;
     }}
 
     section[data-testid="stSidebar"] div[data-baseweb="select"] span,
-    section[data-testid="stSidebar"] div[data-baseweb="select"] div {{
+    section[data-testid="stSidebar"] div[data-baseweb="select"] div,
+    div[data-testid="stDateInput"] span,
+    div[data-testid="stDateInput"] div:not([data-testid="stWidgetLabel"]) {{
         color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
     }}
 
-    section[data-testid="stSidebar"] input::placeholder {{
+    section[data-testid="stSidebar"] input::placeholder,
+    div[data-testid="stDateInput"] input::placeholder {{
         color: #666666 !important;
         -webkit-text-fill-color: #666666 !important;
     }}
