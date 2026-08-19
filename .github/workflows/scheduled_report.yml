@@ -28,9 +28,11 @@ jobs:
           pip install -r requirements.txt
 
       - name: 4. Inyectar credenciales seguras
+        env:
+          SECRETS_CONTENT: ${{ secrets.SECRETS_TOML }}
         run: |
           mkdir -p .streamlit
-          echo "${{ secrets.SECRETS_TOML }}" > .streamlit/secrets.toml
+          python -c "import os; open('.streamlit/secrets.toml', 'w', encoding='utf-8').write(os.environ['SECRETS_CONTENT'])"
 
       - name: 5. Ejecutar generación y envío de reporte
         run: python send_scheduled_report.py
