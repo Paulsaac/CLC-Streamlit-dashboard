@@ -3,12 +3,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: clc-meli-dashboard
     restart: unless-stopped
     ports:
       - "8501:8501"
+    networks:
+      - dokploy-network
+      - default
     volumes:
-      # Montar archivo de secretos en modo solo lectura (para ejecución local o servidores propios)
       - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
     environment:
       - PYTHONUNBUFFERED=1
+
+networks:
+  dokploy-network:
+    external: true
+
