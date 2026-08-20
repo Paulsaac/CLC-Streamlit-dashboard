@@ -7,9 +7,45 @@ from email.mime.application import MIMEApplication
 import streamlit as st
 
 
+def obtener_configuracion_email():
+    """
+    Obtiene la configuración del servicio de correo buscando primero en st.secrets
+    y luego en variables de entorno como fallback.
+    """
+    # Función auxiliar para leer desde secrets o env
+    def get_val(key, default=None):
+        try:
+            if key in st.secrets:
+                return st.secrets[key]
+        except Exception:
+            pass
+        return os.getenv(key, default)
+
+    remitente = get_val("EMAIL_USER") or get_val("SMTP_USER")
+    password = get_val("EMAIL_PASSWORD") or get_val("SMTP_PASSWORD")
+    smtp_server = get_val("SMTP_HOST") or get_val("EMAIL_HOST", "smtp.gmail.com")
+    smtp_port = int(get_val("SMTP_PORT", get_val("EMAIL_PORT", 587)))
+    sender_name = get_val("EMAIL_SENDER_NAME", "CLC Reportes - Mercado Libre")
+    use_ssl = get_val("SMTP_USE_SSL", False)
+
+    # Si el puerto es 465, activar SSL por defecto
+    if smtp_port == 465 or str(use_ssl).lower() in ("true", "1", "yes"):
+        use_ssl = True
+
+    return {
+        "remitente": remitente,
+        "password": password,
+        "smtp_server": smtp_server,
+        "smtp_port": smtp_port,
+        "sender_name": sender_name,
+        "use_ssl": use_ssl
+    }
+
+
 def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
     """
-    Envía un reporte PDF adjunto por correo electrónico a través del servidor SMTP de Gmail.
+    Envía un reporte PDF adjunto por correo electrónico a través de un servidor SMTP configurable
+    (soporta Gmail, Cloudflare, servidores corporativos de leveraweb.com, Resend, etc.).
 
     Parámetros:
     -----------
@@ -23,15 +59,17 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
     bool
         True si el correo fue enviado exitosamente, False si ocurrió algún error.
     """
-    # 1. Leer credenciales de forma segura desde st.secrets
-    try:
-        remitente = st.secrets["EMAIL_USER"]
-        password = st.secrets["EMAIL_PASSWORD"]
-    except KeyError as e:
-        print(f"❌ [EMAIL_ERROR] Clave de secreto faltante en .streamlit/secrets.toml: {e}")
-        return False
-    except Exception as e:
-        print(f"❌ [EMAIL_ERROR] No se pudieron cargar las credenciales desde st.secrets: {e}")
+    # 1. Obtener credenciales y configuración
+    config = obtener_configuracion_email()
+    remitente = config["remitente"]
+    password = config["password"]
+    smtp_server = config["smtp_server"]
+    smtp_port = config["smtp_port"]
+    sender_name = config["sender_name"]
+    use_ssl = config["use_ssl"]
+
+    if not remitente or not password:
+        print("❌ [EMAIL_ERROR] Credenciales EMAIL_USER y EMAIL_PASSWORD no encontradas en configuración.")
         return False
 
     # 2. Validar existencia del archivo PDF
@@ -41,18 +79,15 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
         return False
 
     try:
-        # 3. Configuración del servidor SMTP (Gmail)
-        smtp_server = "smtp.gmail.com"
-        smtp_port = 587
         asunto = "Reporte Semanal CLC - Mercado Libre & Performance"
 
-        # 4. Construcción del mensaje MIME
+        # 3. Construcción del mensaje MIME
         mensaje = MIMEMultipart()
-        mensaje["From"] = f"CLC Reportes <{remitente}>"
+        mensaje["From"] = f"{sender_name} <{remitente}>"
         mensaje["To"] = destinatario
         mensaje["Subject"] = asunto
 
-        # Cuerpo del correo en formato HTML
+        # Cuerpo del correo en formato HTML profesional
         cuerpo_html = f"""
         <!DOCTYPE html>
         <html lang="es">
@@ -92,7 +127,7 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
 
                 <div style="background-color: #F8FAF9; padding: 12px 24px; border-top: 1px solid #EAEAEA; text-align: center;">
                     <p style="margin: 0; font-size: 0.75rem; color: #888888;">
-                        Mensaje generado automáticamente por el sistema de reportes de CLC.
+                        Mensaje generado automáticamente por el sistema de reportes de CLC Maderas ({remitente}).
                     </p>
                 </div>
             </div>
@@ -101,7 +136,7 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
         """
         mensaje.attach(MIMEText(cuerpo_html, "html", "utf-8"))
 
-        # 5. Adjuntar el archivo PDF
+        # 4. Adjuntar el archivo PDF
         with open(pdf_path, "rb") as archivo:
             adjunto = MIMEApplication(archivo.read(), _subtype="pdf")
             adjunto.add_header(
@@ -111,18 +146,25 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
             )
             mensaje.attach(adjunto)
 
-        # 6. Conexión SMTP y envío con autenticación TLS
-        print(f"🔄 Conectando al servidor SMTP ({smtp_server}:{smtp_port})...")
-        with smtplib.SMTP(smtp_server, smtp_port, timeout=25) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(remitente, password)
-            server.sendmail(remitente, [destinatario], mensaje.as_string())
+        # 5. Conexión SMTP y envío (soporta SSL en puerto 465 o STARTTLS en puerto 587)
+        print(f"🔄 Conectando al servidor SMTP ({smtp_server}:{smtp_port}, SSL={use_ssl})...")
+        
+        if use_ssl:
+            with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30) as server:
+                server.login(remitente, password)
+                server.sendmail(remitente, [destinatario], mensaje.as_string())
+        else:
+            with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(remitente, password)
+                server.sendmail(remitente, [destinatario], mensaje.as_string())
 
-        print(f"✅ [EMAIL_SUCCESS] Reporte enviado exitosamente a: {destinatario}")
+        print(f"✅ [EMAIL_SUCCESS] Reporte enviado exitosamente desde {remitente} a: {destinatario}")
         return True
 
     except Exception as e:
         print(f"❌ [EMAIL_ERROR] Error durante el envío del correo: {e}")
         return False
+
