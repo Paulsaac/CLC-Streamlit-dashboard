@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "8501:8501"
+    expose:
+      - "8501"
     networks:
       - dokploy-network
       - default
@@ -13,8 +13,15 @@ services:
       - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
     environment:
       - PYTHONUNBUFFERED=1
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.clc-dashboard.rule=Host(`clc-dashboard-d9zigw-ecc22f-23-88-44-117.sslip.io`)"
+      - "traefik.http.routers.clc-dashboard.entrypoints=web"
+      - "traefik.http.services.clc-dashboard.loadbalancer.server.port=8501"
 
 networks:
   dokploy-network:
     external: true
+
 
