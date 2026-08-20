@@ -9,8 +9,6 @@ services:
     networks:
       - dokploy-network
       - default
-    volumes:
-      - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
     environment:
       - PYTHONUNBUFFERED=1
     labels:
@@ -23,5 +21,6 @@ services:
 networks:
   dokploy-network:
     external: true
+
 
 
