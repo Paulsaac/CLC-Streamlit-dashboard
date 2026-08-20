@@ -21,10 +21,22 @@ def obtener_configuracion_email():
             pass
         return os.getenv(key, default)
 
-    remitente = get_val("EMAIL_USER") or get_val("SMTP_USER")
-    password = get_val("EMAIL_PASSWORD") or get_val("SMTP_PASSWORD")
+    email_user = get_val("EMAIL_USER")
+    smtp_user = get_val("SMTP_USER")
     smtp_server = get_val("SMTP_HOST") or get_val("EMAIL_HOST", "smtp.gmail.com")
-    smtp_port = int(get_val("SMTP_PORT", get_val("EMAIL_PORT", 587)))
+    password = get_val("EMAIL_PASSWORD") or get_val("SMTP_PASSWORD") or get_val("RESEND_API_KEY")
+
+    # Si se utiliza Resend, el usuario SMTP de autenticación siempre es 'resend'
+    if "resend" in smtp_server.lower() or (password and str(password).startswith("re_")):
+        if not get_val("SMTP_HOST"):
+            smtp_server = "smtp.resend.com"
+        auth_user = smtp_user or "resend"
+        from_email = get_val("EMAIL_FROM") or email_user or "onboarding@resend.dev"
+    else:
+        auth_user = smtp_user or email_user
+        from_email = get_val("EMAIL_FROM") or email_user
+
+    smtp_port = int(get_val("SMTP_PORT", get_val("EMAIL_PORT", 465 if "resend" in smtp_server.lower() else 587)))
     sender_name = get_val("EMAIL_SENDER_NAME", "CLC Reportes - Mercado Libre")
     use_ssl = get_val("SMTP_USE_SSL", False)
 
@@ -33,13 +45,15 @@ def obtener_configuracion_email():
         use_ssl = True
 
     return {
-        "remitente": remitente,
+        "auth_user": auth_user,
+        "from_email": from_email,
         "password": password,
         "smtp_server": smtp_server,
         "smtp_port": smtp_port,
         "sender_name": sender_name,
         "use_ssl": use_ssl
     }
+
 
 
 def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
@@ -61,15 +75,16 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
     """
     # 1. Obtener credenciales y configuración
     config = obtener_configuracion_email()
-    remitente = config["remitente"]
+    auth_user = config["auth_user"]
+    from_email = config["from_email"]
     password = config["password"]
     smtp_server = config["smtp_server"]
     smtp_port = config["smtp_port"]
     sender_name = config["sender_name"]
     use_ssl = config["use_ssl"]
 
-    if not remitente or not password:
-        print("❌ [EMAIL_ERROR] Credenciales EMAIL_USER y EMAIL_PASSWORD no encontradas en configuración.")
+    if not auth_user or not password:
+        print("❌ [EMAIL_ERROR] Credenciales de autenticación no encontradas en configuración.")
         return False
 
     # 2. Validar existencia del archivo PDF
@@ -83,7 +98,7 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
 
         # 3. Construcción del mensaje MIME
         mensaje = MIMEMultipart()
-        mensaje["From"] = f"{sender_name} <{remitente}>"
+        mensaje["From"] = f"{sender_name} <{from_email}>"
         mensaje["To"] = destinatario
         mensaje["Subject"] = asunto
 
@@ -127,7 +142,7 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
 
                 <div style="background-color: #F8FAF9; padding: 12px 24px; border-top: 1px solid #EAEAEA; text-align: center;">
                     <p style="margin: 0; font-size: 0.75rem; color: #888888;">
-                        Mensaje generado automáticamente por el sistema de reportes de CLC Maderas ({remitente}).
+                        Mensaje generado automáticamente por el sistema de reportes de CLC Maderas ({from_email}).
                     </p>
                 </div>
             </div>
@@ -151,17 +166,17 @@ def enviar_reporte_email(ruta_pdf: str, destinatario: str) -> bool:
         
         if use_ssl:
             with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30) as server:
-                server.login(remitente, password)
-                server.sendmail(remitente, [destinatario], mensaje.as_string())
+                server.login(auth_user, password)
+                server.sendmail(from_email, [destinatario], mensaje.as_string())
         else:
             with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
                 server.ehlo()
                 server.starttls()
                 server.ehlo()
-                server.login(remitente, password)
-                server.sendmail(remitente, [destinatario], mensaje.as_string())
+                server.login(auth_user, password)
+                server.sendmail(from_email, [destinatario], mensaje.as_string())
 
-        print(f"✅ [EMAIL_SUCCESS] Reporte enviado exitosamente desde {remitente} a: {destinatario}")
+        print(f"✅ [EMAIL_SUCCESS] Reporte enviado exitosamente desde {from_email} a: {destinatario}")
         return True
 
     except Exception as e:
