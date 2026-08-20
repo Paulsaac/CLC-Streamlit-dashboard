@@ -20,9 +20,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
-      - "traefik.http.routers.clc-dashboard.rule=Host(`clc-dashboard-d9zigw-ecc22f-23-88-44-117.sslip.io`)"
-      - "traefik.http.routers.clc-dashboard.entrypoints=web"
+      - "traefik.http.routers.clc-dashboard.rule=Host(`clc-reportes.leveraweb.com`) || Host(`clc-dashboard-d9zigw-ecc22f-23-88-44-117.sslip.io`)"
+      - "traefik.http.routers.clc-dashboard.entrypoints=web,websecure"
       - "traefik.http.services.clc-dashboard.loadbalancer.server.port=8501"
+
 
 networks:
   dokploy-network:
