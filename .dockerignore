@@ -1,0 +1,29 @@
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+.env
+
+# Git & IDE configs
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+
+# Streamlit secrets (sensible - nunca incluir en la imagen)
+.streamlit/secrets.toml
+
+# Generated PDF reports & temporary files
+*.pdf
+reporte_semanal_clc.pdf
+*.log
+
+# Docker metadata
+Dockerfile*
+docker-compose*.yml
+.dockerignore

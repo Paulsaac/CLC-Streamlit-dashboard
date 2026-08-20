@@ -1,0 +1,14 @@
+services:
+  streamlit-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clc-meli-dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      # Montar archivo de secretos en modo solo lectura (para ejecución local o servidores propios)
+      - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
+    environment:
+      - PYTHONUNBUFFERED=1
