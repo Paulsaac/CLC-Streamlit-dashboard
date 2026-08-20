@@ -9,8 +9,12 @@ services:
     networks:
       - dokploy-network
       - default
+    volumes:
+      - ./.streamlit:/app/.streamlit
     environment:
       - PYTHONUNBUFFERED=1
+      - SECRETS_TOML=${SECRETS_TOML:-}
+
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
