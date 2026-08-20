@@ -13,7 +13,9 @@ services:
       - ./.streamlit:/app/.streamlit
     environment:
       - PYTHONUNBUFFERED=1
+      - SECRETS_BASE64=${SECRETS_BASE64:-}
       - SECRETS_TOML=${SECRETS_TOML:-}
+
 
     labels:
       - "traefik.enable=true"
